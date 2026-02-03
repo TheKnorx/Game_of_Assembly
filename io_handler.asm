@@ -11,7 +11,7 @@ section .text
 
 global ascii_to_int, try_write_game_field
 ; glibc functions and variables
-extern malloc, snprintf, fopen, fprintf, fputc, _exit, perror
+extern malloc, snprintf, fopen, fprintf, fputc, _exit, perror, free
 ; project intern functions and variables
 extern FIELD_AREA, FIELD_WIDTH, FIELD_HEIGHT
 
@@ -78,7 +78,7 @@ try_write_game_field:
     ;int snprintf(char str[restrict .size], size_t size,
     ;               const char *restrict format, ...);
     xor     rax, rax                ; clear rax once again for glibc call
-    mov     rdi, CURRENT_FILENAME   ; parameter char str[restrict .size]
+    mov     rdi, [CURRENT_FILENAME]   ; parameter char str[restrict .size]
     mov     rsi, FILENAME_SIZE      ; parameter size_t size
     mov     rdx, FILENAME           ; parameter const char *restrict format
     mov     rcx, r12                ; format parameter - fill into the filename the generation
@@ -89,12 +89,18 @@ try_write_game_field:
     ; next open the file using the newly generated filename
     ; FILE *fopen(const char *restrict pathname, const char *restrict mode);
     xor     rax, rax                ; clear rax
-    mov     rdi, CURRENT_FILENAME   ; parameter const char *restrict pathname
+    mov     rdi, [CURRENT_FILENAME]   ; parameter const char *restrict pathname
     mov     rsi, FOPEN_FILEMODE     ; parameter const char *restrict mode
     call    fopen                   ; create the new file and open it
     cmp     rax, 0x00       ; compare return value of fopen --> success means != NULL
     je      .failed         ; the return value == NULL --> print error and exit
     mov     [CURRENT_FILESTREAM], rax  ; move file stream ptr into variable
+
+    ; as the filename is not longer of use, free its allocated space
+    ; void free(void *_Nullable ptr);
+    xor     rax, rax                ; clear rax
+    mov     rdi, [CURRENT_FILENAME]   ; parameter void *_Nullable ptr
+    call    free                    ; free allocated memory
 
     ; next write the file premable into the file
     ; int fprintf(FILE *restrict stream,
