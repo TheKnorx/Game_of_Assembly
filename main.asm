@@ -15,7 +15,7 @@ section .data
 section .text
 
 global main
-global FIELD_WIDTH, FIELD_HEIGHT, FIELD_AREA, FIELDS_ARRAY
+global FIELD_WIDTH, FIELD_HEIGHT, FIELD_AREA, FIELDS_ARRAY, GENERATIONS
 ; project functions that may not return
 extern try_alloc_fields
 ; project functions (that always return)
@@ -86,6 +86,8 @@ simulate:
             jb      .for_row        ;    we continue the loop 
             ; else we fall through and enter the next generation
 
+        ; rdi already set for function parameter
+        mov     rsi, rbx        ; move generations into rsi for parameter to function
         call    try_write_game_field  ; write current generation to file; !we might not return from this function! 
         dec     rbx             ; rbx--
         jmp     .for_generation ; continue the loop
