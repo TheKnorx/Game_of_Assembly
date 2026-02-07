@@ -22,7 +22,7 @@ LDFLAGS   ?= -no-pie
 TARGET := main
 
 # List your asm sources explicitly (keeps ordering stable & obvious)
-SRCS := main.asm io_handler.asm memory_handler.asm field_handler.asm
+SRCS := main.asm io_handler.asm memory_handler.asm field_handler.asm DEBUG_helper.asm
 
 BUILD_DIR := build
 OBJS := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(SRCS))
