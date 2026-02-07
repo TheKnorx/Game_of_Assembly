@@ -13,7 +13,7 @@ global ascii_to_int, try_write_game_field
 ; glibc functions and variables
 extern malloc, snprintf, fopen, fprintf, fputc, _exit, perror, free
 ; project intern functions and variables
-extern FIELD_AREA, FIELD_WIDTH, FIELD_HEIGHT
+extern FIELD_AREA, FIELD_WIDTH, FIELD_HEIGHT, GENERATIONS
 
 
 ; function for converting a ascii encoded number to a integer
@@ -61,11 +61,15 @@ try_write_game_field:
     and     rsp, -16
 
     push    r12             ; use as temp storage for generation and as index for iterating through the game field
-    mov     r12, rsi        ; save generation in rsi into r12
     push    r13             ; use as a temp storage for the passed field pointer
     mov     r13, rdi        ; save field pointer into r13
 
-    ; first allocate memory for the new file name
+    ; first "invert" the generation, cause in main we count from high to low
+    mov     r12, [GENERATIONS]; move amount of generations into rax
+    sub     r12, rsi        ; subtract absolute amount of gens from current "reverse" gen to get to the inverted real gen
+
+
+    ; then allocate memory for the new file name
     ; void *malloc(size_t size);
     xor     rax, rax                ; clear rax for glibc call
     mov     rdi, FILENAME_SIZE      ; allocate exactly 14 bytes
