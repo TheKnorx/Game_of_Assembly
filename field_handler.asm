@@ -5,28 +5,46 @@ section .text
 global configure_field, decide_cell_state
 ; Project internal functions and variables
 extern FIELDS_ARRAY, FIELD_WIDTH, FIELD_AREA, FIELD_HEIGHT
+; debug functions: 
+extern print_neighbour, print_new_cell_state
 ; glibc functions
 
 
 ; macro for checking if we found a neigbour and if so, increment the neighbour counter
 ; possible neighbour at al, neighbour counter at r13
-%macro _check_neighbour 0
-    cmp     al, 0x00        ; check if al is a dead cell
-    je      %%dead          ; if its dead, skip it
-    inc     r13             ; else increment r13/neighbour counter
+%macro _CHECK_NEIGHBOUR 0
+    cmp     al, 0x00            ; check if al is a dead cell
+    je      %%dead              ; if its dead, skip it
+    inc     r13                 ; else increment r13/neighbour counter
     %%dead:
 %endmacro
 
+; macro for intializing registers for and performing the function call to _access_field  
+; it takes two parameters: the register storing the y coordinate part, and the register storing the x part
+%macro _OBSOLETE_ACCESS_FIELD 2
+    mov     rdi, [rbp-8]        ; move field_to_read pointer into rsi
+    mov     rsi, %1             ; move row_index/y into rsi
+    mov     rdx, %2             ; move column_index/x into rdx
+    call    _access_field       ; get cell value at that position in rax
+%endmacro
 
-; configure the field with a fixed pattern
+; macro for intializing registers for and performing the function call to _get_coordinate, and accessing the field
+; it takes two parameters: the register storing the y coordinate part, and the register storing the x part
+%macro _ACCESS_FIELD 2
+    mov     rdi, [rbp-8]        ; move field_to_read pointer into rsi
+    mov     rsi, %1             ; move row_index/y into rsi
+    mov     rdx, %2             ; move column_index/x into rdx
+    call    _get_coordinate     ; get the 1d coordinate
+    ; access the field with the calculated 1d coordinate
+    mov     al, [rdi+rax]       ; access the field with rdi+rax and write the value back to rax
+    movzx   rax, al             ; migrate al into rax
+%endmacro
+
+
+; functio for configuring the field with a fixed pattern
 ; maybe I will add support for input of a pattern of cells later on...
 ; (-)[-]
 configure_field:
-    ; Prologe - actually we wouldn't need it here but to keep everything in order...
-    push    rbp
-    mov     rbp, rsp
-    and     rsp, -16
-    
     ; Special Cell Configuration:
     ;       OO             (24,25)(25,25)
     ;      OO       (23,26)(24,26)
@@ -37,19 +55,19 @@ configure_field:
     ; Then add the x-coordinate to the result --> out comes a 1d coordinate representation of a 2d coordinate
     mov     rdi, [FIELDS_ARRAY] ; move pointer to game field into destination register
 
-    ; move into rax the starting point in the coordination field
-    mov     rax, [FIELD_AREA]   ; move field area into rax --> divident
-    mov     rcx, 0x2            ; move 2 into rcx --> divisor
-    xor     rdx, rdx            ; clear rdx for div, cause divident is RDX:RAX 
-    div     rcx                 ; rax / rcx (2)
+    ; move into rax the coordinate of the center of the game field
+    ; we do this by adding the field area to the field width and then divide that shit by 2 (by shifting)
+    mov     rax, [FIELD_AREA]   ; move field_area into rax
+    add     rax, [FIELD_WIDTH]  ; move field_width into rax
+    shr     rax, 0x01           ; shift one to the right --> divide rax by 2
 
     ; create the first two cells
-    add     rax, 25             ; create the first coodinate (25,25)
     mov     byte [rdi+rax], 0x1 ; put a living cell at that coordinate of the game field
     mov     byte [rdi+rax-0x1], 0x1  ; also put a living cell at the next coordinate (24,25) of the game field
 
     ; move one row up and create next two cells
     add     rax, [FIELD_WIDTH]  ; add another row to rax --> we are now at (24,26)
+    sub     rax, 0x01           ; subtract 1 from rax to get to x coodinate (24,y)
     mov     byte [rdi+rax], 0x1 ; put a living cell at that coordinate of the game field
     mov     byte [rdi+rax-0x1], 0x1 ; also put a living cell at the coordinate (23,26) of the game field
 
@@ -58,71 +76,90 @@ configure_field:
     mov     byte [rdi+rax], 0x1 ; put a living cell there
     ; we are finished with this configuration --> return from this function
 
-    .return:
-        ; Epilog
-        mov     rsp, rbp
-        pop     rbp
-        ret
+    ret
 
 
-; perform modolo arithmetric 'x mod y' and return result
+; procedure for perform modolo arithmetric 'x mod y' and return result
 ; important trick we do here is that if x is negativ, we add y to x before the mod
 ; (int x, int y)[int (x mod y)]
 _modolo:
-    cmp     rdi, 0x00       ; check if x is negativ
-    jl      .mod            ; if not negative, we perform the mod
-    .prepare_mod:           ; else we do the trick: x+=y before the mod
-        add     rdi, rsi    ; add x+=y
-    .mod:                   ; do the mod operation: x mod y
-        mov     rax, rdi    ; move divident x into rax for implicit DIV operand
-        xor     rdx, rdx    ; clear rdx so it doesnt mess with the divident --> RDX:RAX
-        div     rsi         ; divide rax/rdi --> gives us the rest of the division in rdx
-    mov     rdx, rax        ; move mod result into rax for returning
-    ret                     ; return from procedure
+    cmp     rdi, 0x00           ; check if x is negativ
+    jge     .mod                ; if not negative, we perform the mod
+    .prepare_mod:               ; else we do the trick: x+=y before the mod
+        add     rdi, rsi        ; add x+=y
+    .mod:                       ; do the mod operation: x mod y
+        mov     rax, rdi        ; move divident x into rax for implicit DIV operand
+        xor     rdx, rdx        ; clear rdx so it doesnt mess with the divident --> RDX:RAX
+        div     rsi             ; divide rax/rdi --> gives us the rest of the division in rdx
+    mov     rax, rdx            ; move mod result into rax for returning
+    ret                         ; return from procedure
 
 
-; calculate the absolute 1d (x) coordinate of one 2d coordinate (x|y)
-; --> 1d coordinate z = y*FIELD_WIDTH + x
-; (int x, int y)[int z]
-;_get_coordinate:
-;    mov     rax, rsi        ; move factor y into rax for implicit MUL operand
-;    xor     rdx, rdx        ; clear rdx so it doesnt mess with the factor --> RDX:RAX
-;    mov     rsi, [FIELD_WIDTH]; move FIELD_WIDTH into rsi as value in rsi is no longer needed
-;    mul     rsi             ; multiply rax*FIELD_WIDTH --> gives us y*FIELD_WIDTH in rax
-;    add     rax, rdi        ; add to the result the x coordinate and we get: y*FIELD_WIDTH + x
-;    ret                     ; return from function - return value / coordinate already in rax
+; procedure for calculating the 1d coordinate (x) of a given 2d coodinate (x|y)
+; and returning it in rax
+; !We pass the coordinate in switched order!
+; (int* field_to_write, int y, int x)[int a]
+_get_coordinate:
+    mov     rax, rsi            ; move rsi/y into rax for MUL operation
+    mov     r9, rdx             ; save rdx/x to r9 for later use
+    xor     rdx, rdx            ; clear rdx so it doesnt mess with the MUL --> RDX:RAX
+    mov     rcx, [FIELD_WIDTH]  ; move field_width into rcx
+    mul     rcx                 ; rax*rcx --> y*field_width --> result in rax
+
+    ; now add the x coordinate to the 1d representation of y, 
+    ; creating the full 1d representation of the coordinate (x, y)
+    add     rax, r9             ; add x to y
+    ret
+
+; procedure for accessing the game field, given a 2d coordinate (x|y),
+; and returning the value from that position
+; coordinates are already modolo'd, so access via them is save (we assume!, if not we are fucked)
+; !We pass the coordinate in switched order!
+; (int* field_to_write, int y, int x)[int a]
+; OBSOLETE: moved part of procedure to _get_coordinate and the other part into a macro
+_OBSOLETE_access_field: 
+    ; begin by first converting y to a 1d representation
+    mov     rax, rsi            ; move rsi/y into rax for MUL operation
+    mov     r9, rdx             ; save rdx/x to r9 for later use
+    xor     rdx, rdx            ; clear rdx so it doesnt mess with the MUL --> RDX:RAX
+    mov     rcx, [FIELD_WIDTH]  ; move field_width into rcx
+    mul     rcx                 ; rax*rcx --> y*field_width --> result in rax
+
+    ; now add the x coordinate to the 1d representation of y, 
+    ; creating the full 1d representation of the coordinate (x, y)
+    add     rax, r9             ; add x to y
+
+    ; access the field with the calculated 1d coordinate
+    mov     al, [rdi+rax]       ; access the field with rdi+rax and write the value back to rax
+    movzx   rax, al             ; migrate al into rax
+    ret                         ; return from procedure - return value is already in rax
 
 
 ; Given a row and column coordinate of a cell, determin the state of this cell and its neighbours
-; and based on those findings decide whether the cell should live on or not
+; and based on those findings decide whether the cell should live or not
 ; Then write the result to the game field --> this function abstracts completely from the main executable section 
 ; the handling and building of coordinates, as well the reading and writing of cell-information to the correct fields
-; (int* field_to_read @ rdi, int* field_to_write @ rsi, int row_index @ rdx, int column_index @ rcx)[-]
+; 
+; PROBLEM: We mix 1d row_indexs with 2d row_index, especially in the modolo calculations --> stick to one
+; 
+; (int* field_to_write @ rdi, int* field_to_read @ rsi, int row_index @ rdx, int column_index @ rcx)[-]
 decide_cell_state:
     ; Prolog
     push    rbp
     mov     rbp, rsp
     and     rsp, -16
 
-    push    rsi             ; push field_to_read to stack --> access via @rbp-8
-    push    rsi             ; push field_to_write to stack --> access via @rbp-2*8
-    push    rbx             ; make rbx available for storage
-    push    r12             ; ...  r12          ...
-    push    r13             ; ...  r13          ...
-    push    r14             ; ...  r14          ...
-    push    r15             ; ...  r15          ...
+    push    rsi                 ; push field_to_read to stack   --> access via @rbp-8   --> _FIELD_TO_READ_MEM
+    push    rdi                 ; push field_to_write to stack  --> access via @rbp-2*8 --> _FIELD_TO_WRITE_MEM
+    push    rbx                 ; make rbx available for storage--> for general temp storage of data
+    push    r12                 ; ...  r12          ...         --> use as index for loops
+    push    r13                 ; ...  r13          ...         --> use as neighbour count
+    push    r14                 ; ...  r14          ...         --> use as storage for row_index
+    push    r15                 ; ...  r15          ...         --> use as storage for column_index
 
-    xor     r12, r12        ; clear r12 --> use as index for loops
-    xor     r13, r13        ; clear rax --> use as neighbour count
-    mov     r14, rdx        ; save rdx/row_index into r14
-    mov     r15, rcx        ; save rcx/column_index into r15
-
-    ; 1d row_index at source cell position:
-    mov     rax, r14        ; move row_index into rax for multiplication
-    xor     rdx, rdx,       ; clear rdx so it doesnt mess with the multiplication --> RDX:RAX
-    mov     r9, [FIELD_WIDTH]; move field_width into r9
-    mul     r9              ; multiply row_index with field_width
-    mov     r14, rax        ; save calculated row coordinate back to r14 --> we use this as a base line
+    xor     r13, r13            ; clear r13
+    mov     r14, rdx            ; save rdx/row_index into r14
+    mov     r15, rcx            ; save rcx/column_index into r15
 
     ; if (field_to_read[row_index][ _modolo(column_index-1, FIELD_WIDTH) ]) neigbours++;
     .left: 
@@ -131,14 +168,12 @@ decide_cell_state:
         sub     rdi, 1          ; subtract 1 from it
         mov     rsi, [FIELD_WIDTH]; move field_width into rsi
         call    _modolo         ; column-1 mod field_width --> result in rax
-        
+
         ; field_to_read[row_index][column_index-1]
-        add     rax, r14        ; add r14 to rax, so r14 wont get overwritten and we can perform pointer arithmetric
-        mov     rsi, [rbp-8]    ; move field_to_read pointer into rsi
-        mov     al, [rsi+rax]   ; copy cell/byte at left position into al
+        _ACCESS_FIELD r14, rax  ; get cell at position [r14][rax] in rax/al
 
         ; neighbours++
-        _check_neighbour        ; use macro for comparing al and setting r13 accordingly
+        _CHECK_NEIGHBOUR        ; use macro for comparing al and setting r13 accordingly
 
     ; if (field_to_read[row_index][ _modolo(column_index+1, FIELD_WIDTH) ]) neigbours++;
     .right: 
@@ -146,47 +181,44 @@ decide_cell_state:
         mov     rdi, r15        ; move column_index into rdi
         add     rdi, 1          ; add 1 to it
         mov     rsi, [FIELD_WIDTH]; move field_width into rsi
-        call    _modolo         ; column-1 mod field_width --> result in rax
+        call    _modolo         ; column+1 mod field_width --> result in rax
 
         ; field_to_read[row_index][ column_index+1 ]
-        add     rax, r14        ; add r14 to rax, so r14 wont get overwritten and we can perform pointer arithmetric
-        mov     rsi, [rbp-8]    ; move field_to_read pointer into rsi
-        mov     al, [rsi+rax]   ; copy cell/byte at left position into al
+        _ACCESS_FIELD r14, rax  ; get cell at position [r14][rax] in rax/al
 
         ; neighbours++
-        _check_neighbour        ; use macro for comparing al and setting r13 accordingly
+        _CHECK_NEIGHBOUR        ; use macro for comparing al and setting r13 accordingly
 
     ; for (int i = 0; i<3; i++) --> see .for section
     ;     if (field_to_read[ _modolo(row_index-1, FIELD_HEIGHT) ][ _modolo(column_index-1+i, FIELD_WIDTH) ]) 
     ;         neighbours++;
     .below: 
-            ; _modolo(row_index-1, FIELD_HEIGHT)
-            mov     rdi, r14        ; move row_index into rax
-            sub     rdi, [FIELD_WIDTH]; move one row below the cell by subtracting the width of the field
-            mov     rsi, [FIELD_HEIGHT]; move the field_height into rsi
-            call    _modolo         ; row_index-1 mod field_height --> result in rax
-            mov     rbx, rax        ; overwrite rbx with new (temporary) row_index 
+        ; _modolo(row_index-1, FIELD_HEIGHT)
+        mov     rdi, r14        ; move row_index into rax
+        sub     rdi, 0x01       ; move one row below the cell
+        mov     rsi, [FIELD_HEIGHT]; move the field_height into rsi
+        call    _modolo         ; row_index-1 mod field_height --> result in rax
+        mov     rbx, rax        ; overwrite rbx with new (temporary) row_index 
 
     ; for (int i = 0; i<3; i++) 
+    xor     r12, r12            ; clear index for loop
     .for:  ; iterate through the 3 positions below the cell from left to right using r12 as index
-        cmp     r12, 0x03   ; compare r12 to 3
+        cmp     r12, 0x03       ; compare r12 to 3
         jge     .break_below; if r12 >= 3, break the loop
         ; else continue iterating through below neighbours
 
         ; _modolo(column_index-1+i, FIELD_WIDTH)
         mov     rdi, r15        ; move column_index into rdi
         sub     rdi, 0x01       ; rdi-- / column_index-1
-        add     r12, rdi        ; add loop index to column_index
+        add     rdi, r12        ; add loop index to column_index
         mov     rsi, [FIELD_WIDTH]; move field_width int rsi
         call    _modolo         ; column_index-1+i mod field_index --> result in rax
 
         ; field_to_read[ row_index-/+1 ][ column_index-1+i ]
-        add     rax, rbx        ; add rbx to rax so rbx wont get overwritten
-        mov     rsi, [rbp-8]    ; move field_to_read pointer into rsi
-        mov     al, [rsi+rax]   ; copy cell/byte at current below position into al
+        _ACCESS_FIELD rbx, rax  ; get cell at position [rbx][rax] in rax/al
 
         ; neighbours++
-        _check_neighbour        ; use macro for comparing al and setting r13 accordingly
+        _CHECK_NEIGHBOUR        ; use macro for comparing al and setting r13 accordingly
 
         inc     r12             ; increment index 
         jmp     .for            ; continue loop
@@ -208,12 +240,13 @@ decide_cell_state:
 
         ; _modolo(row_index+1, FIELD_HEIGHT)
         mov     rdi, r14        ; move row_index into rax
-        add     rdi, [FIELD_WIDTH]; move one row above the cell by adding the width of the field
+        add     rdi, 0x01       ; move one row above the cell
         mov     rsi, [FIELD_HEIGHT]; move the field_height into rsi
         call    _modolo         ; row_index+1 mod field_height --> result in rax
         mov     rbx, rax        ; overwrite rbx with new (temporary) row_index 
 
         mov     r14, -1         ; set flag for section already executed 
+        xor     r12, r12        ; clear index for loop
         jmp     .for            ; use the for loop from above again
 
 
@@ -224,10 +257,9 @@ decide_cell_state:
         ; now first get the state of the current cell - we assume that the coordinates given already point
         ; to the current cell and dont have to be modolo'd or modified in any other way - except converting them to 1d
         pop     r14             ; restore the original row_index value from before
-        add     r14, r15        ; add column_index to row_index building the 1d representation of the cell in the game field
 
-        mov     rsi, [rbp-8]    ; move field_to_read into rsi
-        mov     al, [rax, r14]  ; get cell from rsi at location r14
+        _ACCESS_FIELD r14, r15  ; get cell at position [r14][r15] in rax/al
+
         cmp     al, 0x00        ; compare cell/al, it its alive or dead
         jne     .alive          ; if the value is not 0x00, its alive --> jmp to .alive
         ; else its dead --> fall through to .dead
@@ -247,8 +279,11 @@ decide_cell_state:
             jz     .return      ; al is 0, meaning it has too many neighbours, meaning we kill it, meaning we jmp straight to the return section 
             ; else fall through to the write_back
         .write_back:
-            mov     rdi, [rsi-16]; move field_to_write into rdi
-            mov     byte [rdi + r14], 0x01; set cell from rdi at location r14 to alive
+            mov     rdi, [rbp-16]; move field_to_write into rdi
+            mov     rsi, r14    ; move row_index/y into rsi
+            mov     rdx, r15    ; move column_index/x into rdx
+            call    _get_coordinate; get the 1d coordinate
+            mov     byte [rdi + rax], 0x01; set cell from rdi at the calculated coordinate to alive
 
     .return: 
         ; restore all pushed register
@@ -257,7 +292,7 @@ decide_cell_state:
         pop     r13
         pop     r12
         pop     rbx
-        add     rsp, 0x10   ; remove pushed rdi and rsi from stack
+        add     rsp, 0x10       ; remove pushed rdi and rsi from stack
         ; Epilog
         mov     rsp, rbp
         pop     rbp
