@@ -1,7 +1,7 @@
 #all: main.asm io_handler.asm memory_handler.asm field_handler.asm
 #	../compile_wlib_gcc.sh $^
 
-# Makefile created by ChatGPT - it seems to work but dont bet your hand on it!
+# Makefile created by ChatGPT - it seems to work but dont bet your life on it!
 # Makefile for building the whole project and creating the executable ./main
 # uses nasm for compiling and gcc (ld) for linking
 
@@ -27,7 +27,7 @@ SRCS := main.asm io_handler.asm memory_handler.asm field_handler.asm DEBUG_helpe
 BUILD_DIR := build
 OBJS := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(SRCS))
 
-.PHONY: all clean
+.PHONY: all clean sanitize_files
 all: $(TARGET)
 
 # Ensure build dir exists
@@ -49,3 +49,11 @@ $(TARGET): $(OBJS)
 clean:
 	@printf 'Cleaning up ... removing build directory along with main executable ...\n'
 	@rm -rf "$(BUILD_DIR)" "$(TARGET)"
+
+# Sanitize all files - replace all tabs with spaces to have a nice and clean layout
+sanitize_files:
+	@set -e; \
+	for f in *.asm; do \
+		expand -t 4 "$$f" > "$$f.tmp"; \
+		mv "$$f.tmp" "$$f"; \
+	done
