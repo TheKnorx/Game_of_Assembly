@@ -47,7 +47,7 @@ $(TARGET): $(OBJS)
 	@printf '\nBuild successful: %s/%s\n' "$$(pwd)" "$(TARGET)"
 
 clean:
-	@printf 'Cleaning up ... removing build directory along with main executable ...\n'
+	@printf 'Cleaning up ... removing build directory, target, and gol_* files ...\n'
 	@rm -rf "$(BUILD_DIR)" "$(TARGET)"
 
 # Sanitize all files - replace all tabs with spaces to have a nice and clean layout
@@ -57,3 +57,12 @@ sanitize_files:
 		expand -t 4 "$$f" > "$$f.tmp"; \
 		mv "$$f.tmp" "$$f"; \
 	done
+
+# Build animation using the generated gol_*.pbm pictures
+animation:
+	@printf 'Creating gol.gif from gol_* animation-images ...'
+	@convert -filter point -resize 300%x300% -delay 20 gol_*.pbm gol.gif
+	@printf ' done\n'
+	@printf 'Removing all animation images ...'
+	@rm -rf gol_*
+	@printf ' done\n'
