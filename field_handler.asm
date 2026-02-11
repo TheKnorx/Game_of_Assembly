@@ -5,8 +5,6 @@ section .text
 global configure_field, decide_cell_state
 ; Project internal functions and variables
 extern FIELDS_ARRAY, FIELD_WIDTH, FIELD_AREA, FIELD_HEIGHT
-; core.lib functions and macros
-extern ENTER, LEAVE
 
 %include "core.lib.inc"
 
