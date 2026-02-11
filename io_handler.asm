@@ -9,7 +9,7 @@ section .data
     ERROR_TEXT:         db "A fatal error occured", 0x00  ; error text to be displayed alongside with additional error information
 section .text
 
-global ascii_to_int, try_write_game_field
+global try_write_game_field
 ; glibc functions and variables
 extern malloc, snprintf, fopen, fprintf, fputc, _exit, perror, free
 ; core.lib functions and variables
@@ -23,7 +23,7 @@ extern FIELD_AREA, FIELD_WIDTH, FIELD_HEIGHT, GENERATIONS
 ; function for converting a ascii encoded number to a integer
 ; yes we could use atoi or snprintf or something similar to this, but where would be the fun in that? why dont DIY?
 ; (char* ascii_number)[int number]
-ascii_to_int:  
+DEPRECATED_ascii_to_int:  
     .enter: ENTER
 
     ; init registers needed for convertion

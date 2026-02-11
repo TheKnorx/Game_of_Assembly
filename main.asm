@@ -22,6 +22,8 @@ extern try_alloc_fields
 extern configure_field, free_fields, decide_cell_state, decide_cell_state, clear_field, ascii_to_int, try_write_game_field
 ; glibc functions:
 extern printf
+; core.lib functions
+extern sys_atoi
 
 %include "core.lib.inc"
 
@@ -112,23 +114,23 @@ main:
     .read_cmd_args:     ; check existance of cmd arguments and fill variables accordingly; !we might not get back from this section!
         cmp     rdi, 0x4            ; check if all 3 (+1) arguments were passed to the program
         jne     .print_usage        ; if there are cmd args missing, print usage and exit
-        ; else continue to parse arguments
+        ; else continue to parse arguments - converting int with 'int atoi(const char *nptr);`
 
         mov     r12, rsi            ; save rsi argument table pointer to r12
 
         ; get field width: 
-        mov     rdi, [r12 + 0x8]    ; ptr to ascii encoded field width number
-        call    ascii_to_int    ; convert ascii number to actual integer 
+        mov     rdi, [r12 + 0x8]    ; parameter nptr - ptr to ascii encoded field width number
+        call    sys_atoi            ; convert ascii number to actual integer 
         mov     [FIELD_WIDTH], rax  ; move int into field width variable
 
         ; get field height
-        mov     rdi, [r12+0x8*2]    ; ptr to ascii encoded field height number
-        call    ascii_to_int    ; convert ascii number to actual integer
+        mov     rdi, [r12+0x8*2]    ; parameter nptr - ptr to ascii encoded field height number
+        call    sys_atoi            ; convert ascii number to actual integer
         mov     [FIELD_HEIGHT], rax ; move int into field height variable
 
         ; get amount of generations to simulate
-        mov     rdi, [r12+0x8*3]    ; ptr to ascii encoded generation number
-        call    ascii_to_int    ; convert ascii number to actuall integer
+        mov     rdi, [r12+0x8*3]    ; parameter nptr - ptr to ascii encoded generation number
+        call    sys_atoi            ; convert ascii number to actuall integer
         mov     [GENERATIONS], rax  ; move int into generations variable
 
         ; calculate the field area

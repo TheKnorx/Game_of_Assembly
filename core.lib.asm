@@ -24,7 +24,7 @@ section .bss
 section .data
 section .text
 
-global SYS_ERRNO, sys_malloc, sys_free, sys_realloc, sys_memset, sys_calloc, sys_strlen
+global SYS_ERRNO, sys_malloc, sys_free, sys_realloc, sys_memset, sys_calloc, sys_strlen, sys_atoi
 
 %include "core.lib.inc"
 
@@ -195,7 +195,6 @@ sys_free:
     .return: ret
     
     
-
 ; Replacement-function for: 
 ; size_t strlen(const char *s);
 ; --> needed syscalls: -
@@ -227,3 +226,31 @@ sys_memset:
 
     mov     rax, r9     ; move r9/s[.n] into rax for returning
     .return: ret
+
+
+; Replacement function for:
+; int atoi(const char *nptr);
+sys_atoi:  
+    .enter: ENTER
+
+    ; init registers needed for convertion
+    mov     rsi, rdi       ; copy ascii string into source register
+    xor     rdi, rdi       ; clear rdi & use it for temporary storage of current extracted ascii char
+    xor     rax, rax       ; clear rax for storing/returning the extracted number
+    xor     rcx, rcx       ; clear counter registerfor indexing the string
+    mov     r8, 0xA        ; factor for MUL to make space for next number
+    .for:  ; loop through every ascii char
+        mov    dil, [rsi+rcx]  ; move current byte to be converted into 8-bit part of rdx
+        cmp    dil, 0x00       ; if the current byte is a null terminator
+        je     .return         ; we are finished and return from this function
+        ; else continue converting the ascii
+
+        mul    r8              ; multiply rax by 10 so to make space for another number
+        sub    dil, 0x30       ; sub 32 from ascii to convert it to int
+        add    rax, rdi        ; add the int to rax
+        inc    rcx             ; counter++
+        jmp    .for            ; continue the loop
+
+    .return:  ; return from function --> number in rax 
+        LEAVE
+        ret
