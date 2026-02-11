@@ -1,5 +1,11 @@
 # Game_of_Assembly
 Game of life in assembly
+
+## Prerequisites: 
+* Tool ImageMagick for creating a gif out of the created animation-pictures:<br>
+`sudo apt install imagemagick`
+* System running (debian-based) linux with Intel 64bit x86 architecture.
+
 ## Usage: 
 Creating the animation with its animation pictures:<br>
 `main <field-width> <field-height> <amount of generations>`<br>
@@ -10,7 +16,7 @@ A way of editing the start of the animation may be added in future implementatio
 
 ## Building:
 To build the project use the provided Makefile with the command `make`.
-The program runs only on Intel 64bit x86 architecture! Also it was only tested on Linux and will most likely not work on Windows (- I mean why should it, its Windows. What do you expect?)
+The program runs only on Intel 64bit x86 architecture! Also it was only tested on Ubuntu and will most likely not work on Windows (- I mean why should it, its Windows. What do you expect?)
 
 # Code Conventions:
 ## Function calls
