@@ -24,7 +24,7 @@ section .bss
 section .data
 section .text
 
-global SYS_ERRNO
+global SYS_ERRNO, sys_malloc, sys_free, sys_realloc, sys_memset
 
 %include "core.lib.inc"
 
