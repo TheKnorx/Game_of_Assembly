@@ -23,14 +23,13 @@ extern configure_field, free_fields, decide_cell_state, decide_cell_state, clear
 ; glibc functions:
 extern printf
 
+%include "core.lib.inc"
+
 
 ; function for simulating the generations
 ; ()[]
 simulate:
-    ; Prolog
-    push    rbp
-    mov     rbp, rsp
-    and     rsp, -16
+    .enter: ENTER
     
     push    rbx             ; make rbx available for storing loop index --> so it doesn't get garbled by function calls
     push    r12             ; make r12 available for storing which field to read from
@@ -98,19 +97,14 @@ simulate:
         pop     r13         ; restore pushed r13
         pop     r12         ; restore pushed r12
         pop     rbx         ; restore pushed rbx
-        ; Epilog
-        mov     rsp, rbp
-        pop     rbp
+        LEAVE
         ret
 
 ; main entry point of program
 ; we expect the width, the height of the game field as well as the amount of generations to simulate via command line arguments
 ; (int argc at rdi, char** argv at rsi)[int return-code]
 main: 
-    ; Prolog
-    push    rbp
-    mov     rbp, rsp
-    and     rsp, -16
+    .enter: ENTER
 
     ; Additional registers for additional storage:
     push    r12
@@ -172,8 +166,8 @@ main:
     .print_usage:
         ; int printf(const char *restrict format, ...);
         xor     rax, rax            ; clear rax for std*-glibc function
-        mov     rdi, USAGE_TEXT     ; const char* to format string
-        mov     rsi, [rsi]          ; const char* to first format parameter
+        mov     rdi, USAGE_TEXT     ; parameter format
+        mov     rsi, [rsi]          ; first format parameter
         call    printf
         ; fall through to .return section
 
@@ -182,7 +176,5 @@ main:
         pop     r12
         ; set exit code to 0
         xor     rax, rax
-        ; Epilog
-        mov     rsp, rbp
-        pop     rbp
+        LEAVE
         ret
