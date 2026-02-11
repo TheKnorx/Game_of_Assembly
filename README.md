@@ -22,3 +22,7 @@ The program runs only on Intel 64bit x86 architecture! Also it was only tested o
   ```
   \(For the haters and/or lovers of steal-clean assembly - i dont care and see x64 Assembly Language by Jeff Duntemann: chapter 12 - stack alignment)<br>
   (For the people who are missing the `enter` instruction, see [here](https://stackoverflow.com/a/5964507) why)
+
+## Future ToDo's:
+Full replacement of glibc, including glibc functions, startup-code (`_start`, `__libc_start_main`, ...) and cleanup-code. <br>
+Implementation of custom stdout buffer management and improvement of already implemented mini-memory-allocator in `core.lib.asm`. 
