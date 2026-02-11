@@ -61,8 +61,8 @@ sanitize_files:
 # Build animation using the generated gol_*.pbm pictures
 animation:
 	@printf 'Creating gol.gif from gol_* animation-images ...'
-	@magick $(ls -v gol_*.pbm) -filter point -resize 300% -delay 20 gol.gif
+	@magick $$(ls -v gol_*.pbm) -filter point -resize 300% -delay 20 gol.gif
 	@printf ' done\n'
 	@printf 'Removing all animation images ...'
-	@rm -rf gol_*
+	@rm -f gol_*
 	@printf ' done\n'
