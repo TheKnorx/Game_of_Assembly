@@ -1,7 +1,12 @@
 # Game_of_Assembly
 Game of life in assembly
 ## Usage: 
+Creating the animation with its animation pictures:<br>
 `main <field-width> <field-height> <amount of generations>`<br>
+Creating a gif from the created animation pictures:<br>
+`make animation`<br>
+<br>Until further notice, the start (first generation) of the animation is hardcoded into the code at `field_handler:configure_field`. 
+A way of editing the start of the animation may be added in future implementations!
 
 ## Building:
 To build the project use the provided Makefile with the command `make`.
@@ -25,4 +30,5 @@ The program runs only on Intel 64bit x86 architecture! Also it was only tested o
 
 ## Future ToDo's:
 Full replacement of glibc, including glibc functions, startup-code (`_start`, `__libc_start_main`, ...) and cleanup-code. <br>
-Implementation of custom stdout buffer management and improvement of already implemented mini-memory-allocator in `core.lib.asm`. 
+Implementation of custom stdout buffer management and improvement of already implemented mini-memory-allocator in `core.lib.asm`. <br>
+Implementation of a function capable of taking a user-input and set this as the start of the animation.  
