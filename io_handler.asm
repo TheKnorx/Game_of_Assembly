@@ -12,18 +12,19 @@ section .text
 global ascii_to_int, try_write_game_field
 ; glibc functions and variables
 extern malloc, snprintf, fopen, fprintf, fputc, _exit, perror, free
+; core.lib functions and variables
+extern sys_malloc, sys_free
 ; project intern functions and variables
 extern FIELD_AREA, FIELD_WIDTH, FIELD_HEIGHT, GENERATIONS
+
+%include "core.lib.inc"
 
 
 ; function for converting a ascii encoded number to a integer
 ; yes we could use atoi or snprintf or something similar to this, but where would be the fun in that? why dont DIY?
 ; (char* ascii_number)[int number]
 ascii_to_int:  
-    ; Prolog
-    push    rbp
-    mov     rbp, rsp
-    and     rsp, -16
+    .enter: ENTER
 
     ; init registers needed for convertion
     mov     rsi, rdi       ; copy ascii string into source register
@@ -43,10 +44,8 @@ ascii_to_int:
         inc    rcx             ; counter++
         jmp    .for            ; continue the loop
 
-    .return:  ; return from function --> number in rax
-        ; Epilog
-        mov    rsp, rbp
-        pop    rbp
+    .return:  ; return from function --> number in rax 
+        LEAVE
         ret
 
 
@@ -55,10 +54,7 @@ ascii_to_int:
 ; this might get improved in the future by migrating to the usage of virtual memory instead of real file...
 ; (int* field_to_save, int generation)[]
 try_write_game_field: 
-    ; Prolog
-    push    rbp
-    mov     rbp, rsp
-    and     rsp, -16
+    .enter: ENTER 
 
     push    r12             ; use as temp storage for generation and as index for iterating through the game field
     push    r13             ; use as a temp storage for the passed field pointer
@@ -71,9 +67,9 @@ try_write_game_field:
 
     ; then allocate memory for the new file name
     ; void *malloc(size_t size);
-    xor     rax, rax                ; clear rax for glibc call
-    mov     rdi, FILENAME_SIZE      ; allocate exactly 14 bytes
-    call    malloc                  ; allocate space for new filename
+    ;xor     rax, rax                ; clear rax for glibc call
+    mov     rdi, FILENAME_SIZE      ; parameter size - allocate exactly 14 bytes
+    call    sys_malloc              ; allocate space for new filename
     cmp     rax, 0x00               ; check if the pointer from malloc is NULL
     je      .failed                 ; if its NULL, we print an error message and exit
     mov     [CURRENT_FILENAME], rax ; else we store the pointer in the variable
@@ -83,8 +79,8 @@ try_write_game_field:
     ;               const char *restrict format, ...);
     xor     rax, rax                ; clear rax once again for glibc call
     mov     rdi, [CURRENT_FILENAME] ; parameter char str[restrict .size]
-    mov     rsi, FILENAME_SIZE      ; parameter size_t size
-    mov     rdx, FILENAME           ; parameter const char *restrict format
+    mov     rsi, FILENAME_SIZE      ; parameter size
+    mov     rdx, FILENAME           ; parameter char *restrict format
     mov     rcx, r12                ; format parameter - fill into the filename the generation
     call    snprintf                ; do the magick!
     cmp     rax, 0x00               ; compare return value of snprintf --> success means not negative
@@ -93,8 +89,8 @@ try_write_game_field:
     ; next open the file using the newly generated filename
     ; FILE *fopen(const char *restrict pathname, const char *restrict mode);
     xor     rax, rax                ; clear rax
-    mov     rdi, [CURRENT_FILENAME] ; parameter const char *restrict pathname
-    mov     rsi, FOPEN_FILEMODE     ; parameter const char *restrict mode
+    mov     rdi, [CURRENT_FILENAME] ; parameter *restrict pathname
+    mov     rsi, FOPEN_FILEMODE     ; parameter *restrict mode
     call    fopen                   ; create the new file and open it
     cmp     rax, 0x00               ; compare return value of fopen --> success means != NULL
     je      .failed                 ; the return value == NULL --> print error and exit
@@ -102,16 +98,16 @@ try_write_game_field:
 
     ; as the filename is not longer of use, free its allocated space
     ; void free(void *_Nullable ptr);
-    xor     rax, rax                ; clear rax
-    mov     rdi, [CURRENT_FILENAME] ; parameter void *_Nullable ptr
-    call    free                    ; free allocated memory
+    ;xor     rax, rax                ; clear rax
+    mov     rdi, [CURRENT_FILENAME] ; parameter ptr
+    call    sys_free                ; free allocated memory
 
     ; next write the file premable into the file
     ; int fprintf(FILE *restrict stream,
     ;             const char *restrict format, ...);
     xor     rax, rax                ; clear rax
-    mov     rdi, [CURRENT_FILESTREAM]; parameter FILE *restrict stream
-    mov     rsi, FILE_PREMABEL      ; parameter const char *restrict format
+    mov     rdi, [CURRENT_FILESTREAM]; parameter stream
+    mov     rsi, FILE_PREMABEL      ; parameter format
     mov     rdx, [FIELD_WIDTH]      ; first format parameter
     mov     rcx, [FIELD_HEIGHT]     ; second format parameter
     call    fprintf                 ; write the formatted premable into the file
@@ -121,7 +117,7 @@ try_write_game_field:
     xor     r12, r12        ; now use r12 as the index --> set r12/index to 0
     .for:  ; iterate through all cells and write them to the file
         cmp     r12, [FIELD_AREA]; if we indexed all cells
-        jge     .return         ;   then leave the loop
+        jge     .return         ;   then leave the loop and consequently return from the function
         ; else continue writing 
 
         ; int fputc(int c, FILE *stream);
@@ -152,10 +148,8 @@ try_write_game_field:
         call    _exit           ; exit the program
         hlt                     ; this code should never be reached
 
-    .return:
+    .return: 
         pop     r13         ; restore pushed r13
         pop     r12         ; restore pushed r12
-        ; Epilog
-        mov    rsp, rbp
-        pop    rbp
+        LEAVE
         ret
