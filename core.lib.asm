@@ -254,3 +254,17 @@ sys_atoi:
     .return:  ; return from function --> number in rax 
         LEAVE
         ret
+
+
+; Replacement function for:
+; [[noreturn]] void _exit(int status); and [[noreturn]] void _Exit(int status);
+; --> needed syscalls: exit
+sys_exit: 
+    ; no prolog or epilog needed 
+
+    mov     rax, SYS_EXIT   ; move syscall number into rax
+    ; parameter status already in rdi
+    syscall                 ; do a hard exit on program - without cleanup, without anything!
+    hlt                     ; we should never get to this point
+sys_EXIT: 
+    jmp     _exit           ; we can literally jmp to the _exit implementation as we will never return from it anyways

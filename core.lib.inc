@@ -7,6 +7,7 @@
 %define SYS_MMAP		9
 %define SYS_MUNMAP  	11
 %define SYS_MREMAP 		25
+%define SYS_EXIT        60
 
 
 ; map constants: 

@@ -7,9 +7,9 @@ global try_alloc_fields, free_fields, clear_field
 ; Project internal functions and variables
 extern FIELD_AREA, FIELDS_ARRAY
 ; glibc functions and variables
-extern _exit, perror
+extern perror
 ; core.lib functions
-extern sys_calloc, sys_free
+extern sys_calloc, sys_free, sys_exit
 
 %include "core.lib.inc"
 
@@ -46,7 +46,7 @@ try_alloc_fields:
         mov     rdi, ALLOC_ERROR_TEXT  ; parameter s
         call    perror
         mov     rax, -1         ; move exit code into rax
-        call    _exit           ; exit the program
+        jmp     sys_exit        ; exit the program - in fact jmp to it as we (should) never return from it
         hlt                     ; we should never reach this code
 
     .return:

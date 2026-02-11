@@ -11,9 +11,9 @@ section .text
 
 global try_write_game_field
 ; glibc functions and variables
-extern malloc, snprintf, fopen, fprintf, fputc, _exit, perror, free
+extern snprintf, fopen, fprintf, fputc, perror
 ; core.lib functions and variables
-extern sys_malloc, sys_free
+extern sys_malloc, sys_free, sys_exit
 ; project intern functions and variables
 extern FIELD_AREA, FIELD_WIDTH, FIELD_HEIGHT, GENERATIONS
 
@@ -145,7 +145,7 @@ try_write_game_field:
         mov     rdi, ERROR_TEXT ; parameter const char *s
         call    perror          ; print error text with additional error information
         mov     rax, -1         ; exit code
-        call    _exit           ; exit the program
+        jmp     sys_exit        ; exit the program - we can jmp there cause we should never erturn from it
         hlt                     ; this code should never be reached
 
     .return: 
