@@ -236,7 +236,7 @@ decide_cell_state:
         ; else its dead --> fall through to .dead
         .dead: ; only if the cell as 3 neighbours, it revives. 
             cmp     r13, 0x03   ; compare the neighbours count to 3
-            jne     .leave      ; if the neighbours count != 3, skip it exit from function
+            jne     .return     ; if the neighbours count != 3, skip it and return from the function
             jmp     .write_back ; else revive the cell --> jump to write_back of a 1 into the current location
         .alive: ; if neighbours e {2, 3}, the cell continues to live. Else it dies
             cmp     r13, 0x02   ; compare the neighbours count to 2
@@ -247,7 +247,7 @@ decide_cell_state:
 
             and     al, cl      ; if 2 <= neighbours <= 3, then an AND should result in 1, else it would be 0
             test    al, al      ; test outcome of AND operation
-            jz     .leave       ; al is 0, meaning it has too many neighbours, meaning we kill it, meaning we exit the function
+            jz     .return      ; al is 0, meaning it has too many neighbours, meaning we kill it, meaning we return from the function
             ; else fall through to the write_back
         .write_back:
             mov     rdi, [rbp-16]; move field_to_write into rdi
@@ -256,7 +256,7 @@ decide_cell_state:
             call    _get_coordinate; get the 1d coordinate
             mov     byte [rdi + rax], 0x01; set cell from rdi at the calculated coordinate to alive
 
-    .leave: 
+    .return: 
         ; restore all pushed register
         pop     r15
         pop     r14
@@ -265,4 +265,4 @@ decide_cell_state:
         pop     rbx
         add     rsp, 0x10       ; remove pushed rdi and rsi from stack
         LEAVE
-    .return: ret
+        ret
