@@ -29,7 +29,7 @@ section .data
     STDIO_BUFFER_SIZE:  equ     0x0200  ; allocate 512 bytes for this stdio buffer  
 section .text
 
-global SYS_ERRNO, sys_malloc, sys_free, sys_realloc, sys_memset, sys_calloc, sys_strlen, sys_atoi, sys_exit
+; global SYS_ERRNO, sys_malloc, sys_free, sys_realloc, sys_memset, sys_calloc, sys_strlen, sys_atoi, sys_exit
 
 %include "core.lib.inc"
 
@@ -65,20 +65,21 @@ sys_perror: nop
 ; --> needed libcalls: sys_fflush
 ; >>> int fflush(FILE *_Nullable stream);
 ; <<< as we dont test if the write would succeed everytime, EOF as error indicator is only returned when flushing the buffer - not before!
-; <<< we dont really accept a FILE* object as second parameter but rather just a file-descriptor
+; <<< we dont really accept a FILE* object as second parameter (for fputc) but rather just a file-descriptor
 sys_fputc: 
-    mov     r9, rdi             ; save parameter c into r9 for later usage
-    ;cmp     word [STDIO_BUFFER_INDEX], STDIO_BUFFER_SIZE    ; check if the buffer is full
-    ;jb      .write_buffer       ; if len < size: write to buffer
-    ; else flush the buffer
+    .enter: ENTER
+
+    push    rdi                 ; save parameter c onto stack for later usage
     jmp     .write_buffer       ; skip the following section
 
-    .flush_buffer: 
-        ; rdi - parameter stream - already in rdi - file descriptor to write to
+    .flush_buffer:  ; if we came here - sys_fflush guarantees that the indnex is 0, so we dont jmp here again --> if no error occured!
+        mov     rdi, rsi        ; parameter stream - file descriptor to write to
         call    sys_fflush      ; flush the stdio buffer
         test    rax, rax        ; check if rax == 0
-        jnz     .error          ; if rax == 0: return from function as usual 
-        ; else fall through to write_buffer section again 
+        jz      .write_buffer   ; if rax == 0: jump to write_buffer section
+        ; else pop pushed rdi and jmp to error section
+        add     rsp, 0x08       ; remove pushed rdi without poping it
+        jmp     .error          ; if rax == 0: return from function as usual 
 
     .write_buffer:
         cmp     word [STDIO_BUFFER_INDEX], STDIO_BUFFER_SIZE    ; check if len < sizeof buffer
@@ -88,15 +89,19 @@ sys_fputc:
         mov     dx, [STDIO_BUFFER_INDEX]; move into 16-bit register current index of buffer 
         movzx   rdx, dx                 ; migrate dx into rdx
         mov     rax, [STDIO_BUFFER_PTR] ; move pointer to stdio buffer into rax
+        pop     rdi                     ; move into rdi the previously saved parameter c
         mov     [rax+rdx], dil          ; move parameter c (cast to char) into buffer
         add     word [STDIO_BUFFER_INDEX], 0x01; len+1 to make it represent the current length of the buffer - usage in fflush!
         ; return from function
 
     .normal: 
         xor     rax, rax        ; clear rax
-        mov     al, r9b         ; move parameter c into al (cast to char) for returning
+        ; moving the parameter c from dil into rax is a bit risky - it works technically but its far from pretty engeneering :)
+        mov     al, dil         ; move parameter c from rdx(/dil) into al (cast to unsigned char) for returning
     .error:  ; skip setting rax as rax is already set with the error from sys_fflush
-    .return: ret
+    .return: 
+        LEAVE
+        ret
 
 ; Replacement-function for: 
 ; int fflush(FILE *_Nullable stream);
@@ -107,12 +112,19 @@ sys_fputc:
 ; <<< as we always use [STDIO_BUFFER_PTR] as the buf, and STDIO_BUFFER_LEN as nbyte,
 ; <<< we only need the file-descriptor passed to write - not like glibc where those infos are extracted out of the FILE* stream object
 ; <<< consequently the FILE* stream object is only a file-descriptor, not a real FILE* object like in glibc
+; <<< we also consider the not-writing of all bytes in the buffer a hard error and return with EOF!
 sys_fflush:
+    .enter: ENTER
+
+    cmp     word [STDIO_BUFFER_INDEX], 0x00  ; check if parameter nbyte == 0
+    je      .normal         ; if nbyte == 0, then just return from this function
+    ; else proceed with writing
+
     mov     rax, SYS_WRITE  ; move number of syscall into rax
     ; rdi - parameter fildes - already passed to fflush via rdi
     mov     rsi, [STDIO_BUFFER_PTR] ; parameter buf
-    mov     rdx, [STDIO_BUFFER_INDEX]; parameter nbyte-1
-    add     rdx, 0x01       ; add one to rdx --> real nbyte value
+    mov     dx, [STDIO_BUFFER_INDEX]; parameter nbyte
+    movzx   rdx, dx         ; migrate dx into rdx
     syscall                 ; write buffer into location of file-descriptor
     test    rax, rax        ; check if rax is a negative number
     js      .error          ; if rax < 0: set errno and return from function
@@ -122,8 +134,8 @@ sys_fflush:
     
     mov     rdi, [STDIO_BUFFER_PTR] ; parameter s[.n]
     mov     rsi, 0x00               ; parameter c - empty byte
-    mov     rdx, [STDIO_BUFFER_INDEX]; parameter n-1 - just zero out the part of the buffer that we actually used
-    add     rdx, 0x01               ; add 1 to rdx --> real n value
+    mov     dx, [STDIO_BUFFER_INDEX]; parameter n - just zero out the part of the buffer that we actually used
+    movzx   rdx, dx                 ; migrate dx into rdx
     call    sys_memset              ; clear the buffer - ignore the return value 
     mov     word [STDIO_BUFFER_INDEX], 0x00  ; zero out len variable
     jmp     .normal                 ; return from function
@@ -131,8 +143,10 @@ sys_fflush:
     .error: 
         SET_ERRNO                   ; check syscall for errors and set sys_errno accordingly
         mov     rax, EOF            ; move EOF constant into rax
+        jmp     .return             ; return from function
     .normal: xor    rax, rax        ; clear rax as we return with 0 on success
     .return:
+        LEAVE
         ret
 
 
