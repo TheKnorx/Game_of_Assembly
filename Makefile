@@ -48,8 +48,9 @@ $(TARGET): $(OBJS)
 
 test: test.asm core.lib.asm core.lib.inc
 	nasm -f elf64 -g test.asm -o test.o
-	nasm -f elf64 -g core.lib.asm -o core.lib.o
-	ld -o test test.o core.lib.o
+	#nasm -f elf64 -g core.lib.asm -o core.lib.o
+	# ld -o test test.o core.lib.o
+	ld -o test test.o
 	rm -f test.o core.lib.o
 
 clean-test:
