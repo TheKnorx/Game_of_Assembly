@@ -89,11 +89,12 @@ sys_fputc:
         movzx   rdx, dx                 ; migrate dx into rdx
         mov     rax, [STDIO_BUFFER_PTR] ; move pointer to stdio buffer into rax
         mov     [rax+rdx], dil          ; move parameter c (cast to char) into buffer
-        add     [STDIO_BUFFER_LEN], 0x01; len+1 to make it represent the current length of the buffer - usage in fflush!
+        add     word [STDIO_BUFFER_INDEX], 0x01; len+1 to make it represent the current length of the buffer - usage in fflush!
         ; return from function
 
     .normal: 
-        mov     rax, r9b        ; move parameter c into rax (cast to char) for returning
+        xor     rax, rax        ; clear rax
+        mov     al, r9b         ; move parameter c into al (cast to char) for returning
     .error:  ; skip setting rax as rax is already set with the error from sys_fflush
     .return: ret
 
@@ -124,7 +125,7 @@ sys_fflush:
     mov     rdx, [STDIO_BUFFER_INDEX]; parameter n-1 - just zero out the part of the buffer that we actually used
     add     rdx, 0x01               ; add 1 to rdx --> real n value
     call    sys_memset              ; clear the buffer - ignore the return value 
-    mov     word [STDIO_BUFFER_LEN], 0x00  ; zero out len variable
+    mov     word [STDIO_BUFFER_INDEX], 0x00  ; zero out len variable
     jmp     .normal                 ; return from function
 
     .error: 
