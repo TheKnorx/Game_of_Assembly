@@ -11,42 +11,13 @@ section .text
 
 global try_write_game_field
 ; glibc functions and variables
-extern snprintf, fopen, fprintf, fputc, perror
+extern snprintf, fopen, fprintf, perror, fflush
 ; core.lib functions and variables
-extern sys_malloc, sys_free, sys_exit
+extern sys_malloc, sys_free, sys_exit, sys_fputc, sys_fflush
 ; project intern functions and variables
 extern FIELD_AREA, FIELD_WIDTH, FIELD_HEIGHT, GENERATIONS
 
 %include "core.lib.inc"
-
-
-; function for converting a ascii encoded number to a integer
-; yes we could use atoi or snprintf or something similar to this, but where would be the fun in that? why dont DIY?
-; (char* ascii_number)[int number]
-DEPRECATED_ascii_to_int:  
-    .enter: ENTER
-
-    ; init registers needed for convertion
-    mov     rsi, rdi       ; copy ascii string into source register
-    xor     rdi, rdi       ; clear rdi & use it for temporary storage of current extracted ascii char
-    xor     rax, rax       ; clear rax for storing/returning the extracted number
-    xor     rcx, rcx       ; clear counter registerfor indexing the string
-    mov     r8, 0xA        ; factor for MUL to make space for next number
-    .for:  ; loop through every ascii char
-        mov    dil, [rsi+rcx]  ; move current byte to be converted into 8-bit part of rdx
-        cmp    dil, 0x00       ; if the current byte is a null terminator
-        je     .return         ; we are finished and return from this function
-        ; else continue converting the ascii
-
-        mul    r8              ; multiply rax by 10 so to make space for another number
-        sub    dil, 0x30       ; sub 32 from ascii to convert it to int
-        add    rax, rdi        ; add the int to rax
-        inc    rcx             ; counter++
-        jmp    .for            ; continue the loop
-
-    .return:  ; return from function --> number in rax 
-        LEAVE
-        ret
 
 
 ; function for writing a specified game field to a file for later creating that gif
@@ -111,6 +82,9 @@ try_write_game_field:
     mov     rdx, [FIELD_WIDTH]      ; first format parameter
     mov     rcx, [FIELD_HEIGHT]     ; second format parameter
     call    fprintf                 ; write the formatted premable into the file
+    ; int fflush(FILE *_Nullable stream);
+    mov     rdi, [CURRENT_FILESTREAM]; parameter stream
+    call    fflush                  ; flush all glibc buffers to guarantee a write to the file
     ; starting now, we skip watching for errors concerning file operations
 
     ; if we came till here, we are ready to write the cells into the file:
@@ -120,7 +94,6 @@ try_write_game_field:
         jge     .return         ;   then leave the loop and consequently return from the function
         ; else continue writing 
 
-        ; int fputc(int c, FILE *stream);
         xor     rax, rax        ; clear rax
         xor     rdi, rdi        ; clear rdi
         mov     dil, [r13+r12]  ; move current cell into rdi (8 bit dil) --> parameter int c
@@ -133,8 +106,9 @@ try_write_game_field:
             mov     dil, '1'    ; move the '1' char into dil
         .write:
         ; write char into file
+        ; int fputc(int c, FILE *stream);
         mov     rsi, [CURRENT_FILESTREAM]  ; parameter FILE *stream
-        call    fputc           ; write cell into file (--> gets buffered most likely by stdout)
+        call    sys_fputc       ; write cell into file (--> gets buffered most likely by stdout)
 
         inc     r12             ; r12++ (index++)
         jmp     .for            ; continue the loop
@@ -149,7 +123,10 @@ try_write_game_field:
         hlt                     ; this code should never be reached
 
     .return: 
-        pop     r13         ; restore pushed r13
-        pop     r12         ; restore pushed r12
+        ; int fflush(FILE *_Nullable stream);
+        mov     rdi, [CURRENT_FILESTREAM]  ; parameter stream
+        call    sys_fflush      ; flush any buffer and write everything to the file
+        pop     r13             ; restore pushed r13
+        pop     r12             ; restore pushed r12
         LEAVE
         ret

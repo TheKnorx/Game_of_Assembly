@@ -23,9 +23,11 @@ section .bss
     SYS_ERRNO:          resd    0x01    ; custome errno status variable
     ; field for saving the pointer of the global stdio buffer --> allocated by _start routine
     ; As no multithreading is done here, we only implement one big buffer for every stdio operation 
+    global STDIO_BUFFER_PTR
     STDIO_BUFFER_PTR:   resq    0x01
     STDIO_BUFFER_INDEX: resw    0x01    ; for saving the current length index-form of the buffer --> for knowing when to flush
 section .data
+    global  STDIO_BUFFER_SIZE
     STDIO_BUFFER_SIZE:  equ     0x0200  ; allocate 512 bytes for this stdio buffer  
 section .text
 
@@ -35,6 +37,97 @@ section .text
     neg     eax             ; negate rax
     mov     [SYS_ERRNO], eax; store the value in eax into sys_errno
 %endmacro
+
+; glibc functions that are needed in the meantime to support the bridge between glibc and core.lib
+extern fileno
+
+
+; this procedure acts as a bridge between glibc and core.lib for now
+; in the future, this routine should replace the _start routine of glibc 
+_DEPRECATED_start_core_lib:
+    .enter: ENTER
+    ; we have to preserve the rdi and rsi registers cause we technically execute before main
+    push    rdi
+    push    rsi
+
+    ; first initialize the stdio buffer with sys_malloc
+    ; void *malloc(size_t size);
+    mov     rdi, STDIO_BUFFER_SIZE ; parameter size
+    call    sys_malloc      ; allocate memory for stdio buffer
+    test    rax, rax        ; check if allocation was successful
+    jz      .error          ; if it was not, terminate the program
+    jmp     .return         ; else return from this procedure
+    .error: 
+        mov     rax, -1     ; parameter status move status code into rdi
+        call    sys_exit    ; force exit of program
+    .return: 
+        mov     [STDIO_BUFFER_PTR], rax  ; move pointer to allocated memory into ptr storage variable
+        ; now restore the rdi and rsi registers
+        pop     rsi
+        pop     rdi
+        LEAVE
+        ret
+
+; this procedure acts as a teardown procedure of the program - free buffers and exits the program
+; this section will be moved into the _start procedure in the future
+_DEPRECATED_end_core_lib:
+    .enter: ENTER
+    ; free the stdio buffer
+    ; void free(void *_Nullable ptr);
+    mov     rdi, [STDIO_BUFFER_PTR]
+    call    sys_free
+
+    ; and then exit the program
+    ; [[noreturn]] void _exit(int status);
+    xor     rdi, rdi        ; parameter status - 0
+    call    sys_exit        ; exit the program
+    hlt                     ; execution shouldnt reach this point
+
+
+; for now, this procedure acts as a bridge between glibc and core.lib
+; in the future, this routine should replace the _start routine of glibc 
+global main
+extern _main
+main:  ; actually _start
+    .align_stack: ENTER       ; align the stack to mod 16
+
+    ; we have to preserve the rdi and rsi registers cause we execute after actuall _start
+    push    rdi
+    push    rsi
+
+    .init_process:  ; init the process with all its buffers and stuff idk
+        ; first initialize the stdio buffer with sys_malloc
+        ; void *malloc(size_t size);
+        mov     rdi, STDIO_BUFFER_SIZE  ; parameter size
+        call    sys_malloc              ; allocate memory for stdio buffer
+        test    rax, rax                ; check if allocation was successful
+        jz      .exit_on_error          ; if it was not, terminate the program
+        mov     [STDIO_BUFFER_PTR], rax ; else move pointer to allocated memory into ptr storage variable
+
+    ; restore cmd args register for main function call
+    pop     rsi
+    pop     rdi 
+
+    nop
+    call    _main                       ; call main function
+    nop
+
+    .end_process:  ; end the process by cleaning up of program (freeing buffers etc...)
+        ; free the stdio buffer
+        ; void free(void *_Nullable ptr);
+        mov     rdi, [STDIO_BUFFER_PTR] ; parameter ptr
+        call    sys_free                ; free the stdio buffer
+        jmp     .exit_normal            ; we assume that if we came here the program ran successfully - so we exit as usual (with status 0)
+
+    .exit_on_error: 
+        mov     rax, -1     ; parameter status move status code into rdi
+        call    sys_exit    ; force exit of program
+    .exit_normal: 
+        ; exit the program with status code 0
+        ; [[noreturn]] void _exit(int status);
+        xor     rdi, rdi        ; parameter status - 0
+        call    sys_exit        ; exit the program
+        hlt                     ; execution shouldnt reach this point
 
 
 ; Replacement-function for: 
@@ -120,8 +213,9 @@ sys_fflush:
     je      .normal         ; if nbyte == 0, then just return from this function
     ; else proceed with writing
 
+    call fileno             ; extract the file-descriptor from the FILE* stream to get the parameter filedes
+    mov     rdi, rax        ; parameter filedes - move the returned fd from fileno into rsi 
     mov     rax, SYS_WRITE  ; move number of syscall into rax
-    ; rdi - parameter fildes - already passed to fflush via rdi
     mov     rsi, [STDIO_BUFFER_PTR] ; parameter buf
     mov     dx, [STDIO_BUFFER_INDEX]; parameter nbyte
     movzx   rdx, dx         ; migrate dx into rdx
@@ -386,7 +480,6 @@ sys_atoi:
 global sys_exit, sys_EXIT
 sys_exit: 
     ; no prolog or epilog needed 
-
     mov     rax, SYS_EXIT   ; move syscall number into rax
     ; parameter status already in rdi
     syscall                 ; do a hard exit on program - without cleanup, without anything!

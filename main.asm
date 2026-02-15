@@ -14,7 +14,6 @@ section .data
     USAGE_TEXT:     db "Usage: %s <field-width> <field-height> <amount of generations>", 0xA, 0x00
 section .text
 
-global main
 global FIELD_WIDTH, FIELD_HEIGHT, FIELD_AREA, FIELDS_ARRAY, GENERATIONS
 ; project functions that may not return
 extern try_alloc_fields
@@ -102,10 +101,12 @@ simulate:
         LEAVE
         ret
 
-; main entry point of program
+
+; main entry point of program - as long as we depend on glibc the real main sits in core.lib and acts like _start
 ; we expect the width, the height of the game field as well as the amount of generations to simulate via command line arguments
 ; (int argc at rdi, char** argv at rsi)[int return-code]
-main: 
+global _main
+_main: 
     .enter: ENTER
 
     ; Additional registers for additional storage:
@@ -169,13 +170,14 @@ main:
         ; int printf(const char *restrict format, ...);
         xor     rax, rax            ; clear rax for std*-glibc function
         mov     rdi, USAGE_TEXT     ; parameter format
-        mov     rsi, [rsi]          ; first format parameter
+        mov     rsi, [r12]          ; first format parameter
         call    printf
         ; fall through to .return section
 
     .return:  ; pop any pushed registers & do the epilog
         ;  pop pushed registers
         pop     r12
+
         ; set exit code to 0
         xor     rax, rax
         LEAVE
